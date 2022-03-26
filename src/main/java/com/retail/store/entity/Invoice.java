@@ -1,37 +1,22 @@
 package com.retail.store.entity;
 
-import static com.retail.store.enums.DiscountType.PERCENTAGE;
-import static com.retail.store.enums.DiscountType.PRICE;
-import static com.retail.store.enums.DiscountType.NONE;
-import static com.retail.store.enums.ProductCategory.GROCERY;
-import static com.retail.store.enums.UserType.AFFILIATE;
-import static com.retail.store.enums.UserType.EMPLOYEE;
-import static javax.persistence.EnumType.STRING;
-import static javax.persistence.FetchType.EAGER;
+import com.retail.store.dto.ProductDTO;
+import com.retail.store.enums.DiscountType;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+import javax.persistence.*;
 import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
-import javax.persistence.CascadeType;
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Enumerated;
-import javax.persistence.JoinColumn;
-import javax.persistence.OneToMany;
-import javax.persistence.OneToOne;
-import javax.persistence.Table;
-import javax.persistence.Transient;
-
-import com.retail.store.dto.ProductDTO;
-import com.retail.store.enums.DiscountType;
-
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import static com.retail.store.enums.DiscountType.*;
+import static com.retail.store.enums.ProductCategory.GROCERY;
+import static javax.persistence.EnumType.STRING;
+import static javax.persistence.FetchType.EAGER;
 
 @Getter
 @Setter
@@ -86,26 +71,31 @@ public class Invoice extends BaseEntity {
         LocalDate today = LocalDate.now();
 
         Integer totalPriceWithoutGrocery = this.getTotalPriceWithoutGrocery();
-        
-        if(totalPriceWithoutGrocery != 0) {
-        	
-			if (Objects.equals(user.getUserType(), EMPLOYEE)) {
-				discountPrice = discountByPercentage(totalPriceWithoutGrocery, 30);
-				setDiscountDetails(30, PERCENTAGE, discountPrice);
-			} else if (Objects.equals(user.getUserType(), AFFILIATE)) {
-				discountPrice = discountByPercentage(totalPriceWithoutGrocery, 10);
-				setDiscountDetails(10, PERCENTAGE, discountPrice);
-			} else if (firstInvoiceDateByUser != null && firstInvoiceDateByUser.isBefore(today.minusYears(2))) {
-				discountPrice = discountByPercentage(totalPriceWithoutGrocery, 5);
-				setDiscountDetails(5, PERCENTAGE, discountPrice);
-			} else {
-				discountPrice = discountByPrice(totalPriceWithoutGrocery, 5, 100);
-				setDiscountDetails(discountPrice, PRICE, totalPriceWithoutGrocery - discountPrice);
-			}
+
+        if (totalPriceWithoutGrocery != 0) {
+            switch (user.getUserType()) {
+                case EMPLOYEE:
+                    discountPrice = discountByPercentage(totalPriceWithoutGrocery, 30);
+                    setDiscountDetails(30, PERCENTAGE, discountPrice);
+                    break;
+                case AFFILIATE:
+                    discountPrice = discountByPercentage(totalPriceWithoutGrocery, 10);
+                    setDiscountDetails(10, PERCENTAGE, discountPrice);
+                    break;
+                case CUSTOMER:
+                    if (firstInvoiceDateByUser != null && firstInvoiceDateByUser.isBefore(today.minusYears(2))) {
+                        discountPrice = discountByPercentage(totalPriceWithoutGrocery, 5);
+                        setDiscountDetails(5, PERCENTAGE, discountPrice);
+                    } else {
+                        discountPrice = discountByPrice(totalPriceWithoutGrocery, 5, 100);
+                        setDiscountDetails(discountPrice, PRICE, totalPriceWithoutGrocery - discountPrice);
+                    }
+                    break;
+            }
         } else {
-        	this.setDiscount(0);
-        	this.setDiscountType(NONE);
-        	this.setFinalAmount(this.getTotalPrice());
+            this.setDiscount(0);
+            this.setDiscountType(NONE);
+            this.setFinalAmount(this.getTotalPrice());
         }
         this.setInvoiceDate(new Date());
         this.setTotalBeforeDiscount(this.getTotalPrice());
@@ -133,10 +123,10 @@ public class Invoice extends BaseEntity {
     public Integer getTotalPriceWithoutGrocery() {
         return lineItems.parallelStream().filter(l -> !l.getProduct().getProductCategory().equals(GROCERY)).collect(Collectors.summingInt(InvoiceLineItems::getProductPrice));
     }
-    
+
     private void setDiscountDetails(Integer discount, DiscountType discountType, Integer discountedPrice) {
-    	this.setDiscount(discount);
-    	this.setDiscountType(discountType);
-    	this.setFinalAmount(discountedPrice + getTotalGroceryPrice());
+        this.setDiscount(discount);
+        this.setDiscountType(discountType);
+        this.setFinalAmount(discountedPrice + getTotalGroceryPrice());
     }
 }
